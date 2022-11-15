@@ -73,6 +73,7 @@ void PointCloudToLaserScanNodelet::onInit()
   int concurrency_level;
   private_nh_.param<int>("concurrency_level", concurrency_level, 1);
   private_nh_.param<bool>("use_inf", use_inf_, true);
+  private_nh_.param<bool>("use_max", use_max_, false);
 
   // Check if explicitly single threaded, otherwise, let nodelet manager dictate thread pool size
   if (concurrency_level == 1)
@@ -163,7 +164,11 @@ void PointCloudToLaserScanNodelet::cloudCb(const sensor_msgs::PointCloud2ConstPt
   uint32_t ranges_size = std::ceil((output.angle_max - output.angle_min) / output.angle_increment);
 
   // determine if laserscan rays with no obstacle data will evaluate to infinity or max_range
-  if (use_inf_)
+  if(use_max_)
+  {
+    output.ranges.assign(ranges_size, 0.0);
+  }
+  else if (use_inf_)
   {
     output.ranges.assign(ranges_size, std::numeric_limits<double>::infinity());
   }
@@ -235,6 +240,10 @@ void PointCloudToLaserScanNodelet::cloudCb(const sensor_msgs::PointCloud2ConstPt
 
     // overwrite range at laserscan ray if new range is smaller
     int index = (angle - output.angle_min) / output.angle_increment;
+    if(use_max_ && range > output.ranges[index])
+    {
+      output.ranges[index] = range;
+    }
     if (range < output.ranges[index])
     {
       output.ranges[index] = range;
