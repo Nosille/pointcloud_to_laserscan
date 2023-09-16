@@ -111,12 +111,17 @@ void PointCloudToLaserScanNodelet::onInit()
 
   pub_ = nh_.advertise<sensor_msgs::LaserScan>("scan", 10, boost::bind(&PointCloudToLaserScanNodelet::connectCb, this),
                                                boost::bind(&PointCloudToLaserScanNodelet::disconnectCb, this));
+
+  pub_min_ = nh_.advertise<sensor_msgs::LaserScan>("scan_min", 10, boost::bind(&PointCloudToLaserScanNodelet::connectCb, this),
+                                               boost::bind(&PointCloudToLaserScanNodelet::disconnectCb, this));
+  pub_max_ = nh_.advertise<sensor_msgs::LaserScan>("scan_max", 10, boost::bind(&PointCloudToLaserScanNodelet::connectCb, this),
+                                               boost::bind(&PointCloudToLaserScanNodelet::disconnectCb, this));                                               
 }
 
 void PointCloudToLaserScanNodelet::connectCb()
 {
   boost::mutex::scoped_lock lock(connect_mutex_);
-  if (pub_.getNumSubscribers() > 0 && sub_.getSubscriber().getNumPublishers() == 0)
+  if ((pub_.getNumSubscribers() > 0 || pub_min_.getNumSubscribers() > 0 || pub_max_.getNumSubscribers() > 0) && sub_.getSubscriber().getNumPublishers() == 0)
   {
     NODELET_INFO("Got a subscriber to scan, starting subscriber to pointcloud");
     sub_.subscribe(nh_, "cloud_in", input_queue_size_);
@@ -126,7 +131,7 @@ void PointCloudToLaserScanNodelet::connectCb()
 void PointCloudToLaserScanNodelet::disconnectCb()
 {
   boost::mutex::scoped_lock lock(connect_mutex_);
-  if (pub_.getNumSubscribers() == 0)
+  if ((pub_.getNumSubscribers() < 1 || pub_min_.getNumSubscribers() < 1 || pub_max_.getNumSubscribers() < 1))
   {
     NODELET_INFO("No subscibers to scan, shutting down subscriber to pointcloud");
     sub_.unsubscribe();
@@ -145,43 +150,41 @@ void PointCloudToLaserScanNodelet::failureCb(const sensor_msgs::PointCloud2Const
 void PointCloudToLaserScanNodelet::cloudCb(const sensor_msgs::PointCloud2ConstPtr& cloud_msg)
 {
   // build laserscan output
-  sensor_msgs::LaserScan output;
-  output.header = cloud_msg->header;
+  sensor_msgs::LaserScan output_min, output_max;
+  output_min.header = cloud_msg->header; output_max.header = cloud_msg->header;
   if (!target_frame_.empty())
   {
-    output.header.frame_id = target_frame_;
+    output_min.header.frame_id = target_frame_; output_max.header.frame_id = target_frame_;
   }
 
-  output.angle_min = angle_min_;
-  output.angle_max = angle_max_;
-  output.angle_increment = angle_increment_;
-  output.time_increment = 0.0;
-  output.scan_time = scan_time_;
-  output.range_min = range_min_;
-  output.range_max = range_max_;
+  output_min.angle_min = angle_min_;             output_max.angle_min = angle_min_;
+  output_min.angle_max = angle_max_;             output_max.angle_max = angle_max_;
+  output_min.angle_increment = angle_increment_; output_max.angle_increment = angle_increment_;
+  output_min.time_increment = 0.0;               output_max.time_increment = 0.0;
+  output_min.scan_time = scan_time_;             output_max.scan_time = scan_time_;
+  output_min.range_min = range_min_;             output_max.range_min = range_min_;
+  output_min.range_max = range_max_;             output_max.range_max = range_max_;
 
   // determine amount of rays to create
-  uint32_t ranges_size = std::ceil((output.angle_max - output.angle_min) / output.angle_increment);
+  uint32_t ranges_size = std::ceil((angle_max_ - angle_min_) / angle_increment_);
 
   // determine if laserscan rays with no obstacle data will evaluate to infinity or max_range
-  if(use_max_)
+  if (use_inf_)
   {
-    output.ranges.assign(ranges_size, 0.0);
-  }
-  else if (use_inf_)
-  {
-    output.ranges.assign(ranges_size, std::numeric_limits<double>::infinity());
+    output_min.ranges.assign(ranges_size, std::numeric_limits<double>::infinity());
+    output_max.ranges.assign(ranges_size, 0.0);
   }
   else
   {
-    output.ranges.assign(ranges_size, output.range_max + inf_epsilon_);
+    output_min.ranges.assign(ranges_size, output_min.range_max + inf_epsilon_);
+    output_max.ranges.assign(ranges_size, 0.0);
   }
 
   sensor_msgs::PointCloud2ConstPtr cloud_out;
   sensor_msgs::PointCloud2Ptr cloud;
 
   // Transform cloud if necessary
-  if (!(output.header.frame_id == cloud_msg->header.frame_id))
+  if (!(target_frame_ == cloud_msg->header.frame_id))
   {
     try
     {
@@ -232,24 +235,30 @@ void PointCloudToLaserScanNodelet::cloudCb(const sensor_msgs::PointCloud2ConstPt
     }
 
     double angle = atan2(*iter_y, *iter_x);
-    if (angle < output.angle_min || angle > output.angle_max)
+    if (angle < angle_min_ || angle > angle_max_)
     {
-      NODELET_DEBUG("rejected for angle %f not in range (%f, %f)\n", angle, output.angle_min, output.angle_max);
+      NODELET_DEBUG("rejected for angle %f not in range (%f, %f)\n", angle, output_min.angle_min, output_min.angle_max);
       continue;
     }
 
     // overwrite range at laserscan ray if new range is smaller
-    int index = (angle - output.angle_min) / output.angle_increment;
-    if(use_max_ && range > output.ranges[index])
+    int index = (angle - angle_min_) / angle_increment_;
+    if(range > output_max.ranges[index])
     {
-      output.ranges[index] = range;
+      output_max.ranges[index] = range;
     }
-    if (range < output.ranges[index])
+    if (range < output_min.ranges[index])
     {
-      output.ranges[index] = range;
+      output_min.ranges[index] = range;
     }
   }
-  pub_.publish(output);
+  if(pub_min_.getNumSubscribers() > 0) pub_min_.publish(output_min); 
+  if(pub_max_.getNumSubscribers() > 0) pub_max_.publish(output_max);
+  if(pub_.getNumSubscribers() > 0)
+  {
+    if(use_max_) pub_.publish(output_max);
+    else pub_.publish(output_min); 
+  }
 }
 }  // namespace pointcloud_to_laserscan
 
