@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+
+<launch>
+
+    <arg name="scanner" default="scanner" />
+
+    <!-- run nodelet manager -->
+    <node pkg="nodelet" type="nodelet" name="$(arg scanner)_nodelet_manager" args="manager" output="screen"/>
+
+    <!-- run base_gimbal nodelet -->
+    <node pkg="nodelet" type="nodelet" name="base_gimbal" args="load pointcloud_to_laserscan/base_gimbal_nodelet $(arg scanner)_nodelet_manager">
+
+        <remap from="imu_in" to="/sensors/imu/sensor1/imu/data"/>
+        <param name="child_frame" value="base_gimbal"/>
+        <param name="parent_frame" value="base_footprint"/>
+        <param name="transform_tolerance" value="0.01"/>
+
+    </node>
+
+</launch>

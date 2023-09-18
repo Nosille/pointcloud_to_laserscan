@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+
+<launch>
+
+    <arg name="scanner" default="scanner" />
+
+    <!-- run base_gimbal node -->
+    <node pkg="pointcloud_to_laserscan" type="base_gimbal_node" name="base_gimbal" output="screen">
+
+        <remap from="imu_in" to="/sensors/imu/sensor1/imu/data"/>
+        <param name="child_frame" value="base_gimbal"/>
+        <param name="parent_frame" value="base_footprint"/>
+        <param name="transform_tolerance" value="0.01"/>
+
+    </node>
+
+</launch>

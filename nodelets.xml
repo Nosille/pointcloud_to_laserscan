@@ -21,3 +21,15 @@
   </class>
 
 </library>
+
+<library path="lib/libbase_gimbal">
+
+  <class name="pointcloud_to_laserscan/base_gimbal_nodelet"
+   type="pointcloud_to_laserscan::BaseGimbalNodelet"
+   base_class_type="nodelet::Nodelet">
+    <description>
+      Nodelet to publish a gimbal frame.
+    </description>
+  </class>
+
+</library>

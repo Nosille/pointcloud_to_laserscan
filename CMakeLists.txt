@@ -7,14 +7,16 @@ find_package(catkin REQUIRED COMPONENTS
   nodelet
   roscpp
   sensor_msgs
+  geometry_msgs
   tf2
   tf2_ros
   tf2_sensor_msgs
+  tf2_geometry_msgs
 )
 
 catkin_package(
   INCLUDE_DIRS include
-  LIBRARIES laserscan_to_pointcloud pointcloud_to_laserscan
+  LIBRARIES laserscan_to_pointcloud pointcloud_to_laserscan base_gimbal
   CATKIN_DEPENDS laser_geometry message_filters nodelet roscpp sensor_msgs tf2 tf2_ros tf2_sensor_msgs
 )
 
@@ -35,11 +37,19 @@ target_link_libraries(pointcloud_to_laserscan ${catkin_LIBRARIES})
 add_executable(pointcloud_to_laserscan_node src/pointcloud_to_laserscan_node.cpp)
 target_link_libraries(pointcloud_to_laserscan_node pointcloud_to_laserscan ${catkin_LIBRARIES})
 
+add_library(base_gimbal src/base_gimbal_nodelet.cpp)
+target_link_libraries(base_gimbal ${catkin_LIBRARIES})
+
+add_executable(base_gimbal_node src/base_gimbal_node.cpp)
+target_link_libraries(base_gimbal_node base_gimbal ${catkin_LIBRARIES})
+
 install(TARGETS
   laserscan_to_pointcloud
   laserscan_to_pointcloud_node
   pointcloud_to_laserscan
   pointcloud_to_laserscan_node
+  base_gimbal
+  base_gimbal_node
 	RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 	LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 	ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION})
