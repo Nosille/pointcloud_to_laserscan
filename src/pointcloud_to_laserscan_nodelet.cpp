@@ -131,7 +131,7 @@ void PointCloudToLaserScanNodelet::connectCb()
 void PointCloudToLaserScanNodelet::disconnectCb()
 {
   boost::mutex::scoped_lock lock(connect_mutex_);
-  if ((pub_.getNumSubscribers() < 1 || pub_min_.getNumSubscribers() < 1 || pub_max_.getNumSubscribers() < 1))
+  if ((pub_.getNumSubscribers() < 1 && pub_min_.getNumSubscribers() < 1 && pub_max_.getNumSubscribers() < 1))
   {
     NODELET_INFO("No subscibers to scan, shutting down subscriber to pointcloud");
     sub_.unsubscribe();
@@ -252,6 +252,7 @@ void PointCloudToLaserScanNodelet::cloudCb(const sensor_msgs::PointCloud2ConstPt
       output_min.ranges[index] = range;
     }
   }
+  
   if(pub_min_.getNumSubscribers() > 0) pub_min_.publish(output_min); 
   if(pub_max_.getNumSubscribers() > 0) pub_max_.publish(output_max);
   if(pub_.getNumSubscribers() > 0)
