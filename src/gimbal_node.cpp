@@ -48,7 +48,7 @@
 namespace pointcloud_to_laserscan
 {
 GimbalNode::GimbalNode(const rclcpp::NodeOptions & options)
-: rclcpp::Node("laserscan_to_pointcloud", options)
+: rclcpp::Node("gimbal", options)
 {
   tf2_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
   tf2_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf2_);
@@ -129,3 +129,7 @@ void GimbalNode::imuCallback(const sensor_msgs::msg::Imu::ConstPtr& imu_msg)
   tf2_broadcaster_->sendTransform(tf_msg);
 }
 }  // namespace pointcloud_to_laserscan
+
+#include "rclcpp_components/register_node_macro.hpp"
+
+RCLCPP_COMPONENTS_REGISTER_NODE(pointcloud_to_laserscan::GimbalNode)

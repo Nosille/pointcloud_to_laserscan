@@ -63,7 +63,7 @@ public:
   POINTCLOUD_TO_LASERSCAN_PUBLIC
   explicit GimbalNode(const rclcpp::NodeOptions & options);
 
-  ~GimbalNode() override;
+  // ~GimbalNode() override;
 
 private:
   void imuCallback(const sensor_msgs::msg::Imu::ConstPtr & imu_msg);
