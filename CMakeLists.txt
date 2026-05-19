@@ -11,6 +11,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_sensor_msgs REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 
 add_library(laserscan_to_pointcloud SHARED
   src/laserscan_to_pointcloud_node.cpp)
@@ -54,6 +55,27 @@ rclcpp_components_register_node(pointcloud_to_laserscan
   PLUGIN "pointcloud_to_laserscan::PointCloudToLaserScanNode"
   EXECUTABLE pointcloud_to_laserscan_node)
 
+add_library(gimbal SHARED
+  src/gimbal_node.cpp)
+target_compile_definitions(gimbal
+  PRIVATE "GIMBAL_DLL")
+target_include_directories(gimbal PUBLIC
+  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+  "$<INSTALL_INTERFACE:include/${PROJECT_NAME}>"
+)
+target_link_libraries(gimbal
+  message_filters::message_filters
+  rclcpp::rclcpp
+  rclcpp_components::component
+  tf2::tf2
+  tf2_ros::tf2_ros
+  tf2_sensor_msgs::tf2_sensor_msgs
+  tf2_geometry_msgs::tf2_geometry_msgs  
+)
+rclcpp_components_register_node(gimbal
+  PLUGIN "pointcloud_to_laserscan::GimbalNode"
+  EXECUTABLE gimbal_node)
+
 add_executable(dummy_pointcloud_publisher
   src/dummy_pointcloud_publisher.cpp
 )
@@ -65,6 +87,7 @@ target_link_libraries(dummy_pointcloud_publisher
 install(TARGETS
   laserscan_to_pointcloud
   pointcloud_to_laserscan
+  gimbal
   EXPORT export_${PROJECT_NAME}
   RUNTIME DESTINATION bin
   LIBRARY DESTINATION lib
