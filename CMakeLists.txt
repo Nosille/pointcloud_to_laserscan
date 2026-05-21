@@ -10,6 +10,7 @@ find_package(rclcpp_components REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(tf2_eigen REQUIRED)
 find_package(tf2_sensor_msgs REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 
@@ -69,6 +70,7 @@ target_link_libraries(gimbal
   rclcpp_components::component
   tf2::tf2
   tf2_ros::tf2_ros
+  tf2_eigen::tf2_eigen
   tf2_sensor_msgs::tf2_sensor_msgs
   tf2_geometry_msgs::tf2_geometry_msgs  
 )

@@ -66,6 +66,8 @@ public:
   // ~GimbalNode() override;
 
 private:
+  sensor_msgs::msg::Imu::SharedPtr transformImu(const sensor_msgs::msg::Imu::ConstSharedPtr& imu_raw, 
+                                                const geometry_msgs::msg::TransformStamped& transform);
   void imuCallback(const sensor_msgs::msg::Imu::ConstPtr & imu_msg);
 
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr sub_imu_;

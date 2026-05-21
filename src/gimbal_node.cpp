@@ -35,6 +35,7 @@
  */
 
 #include "pointcloud_to_laserscan/gimbal_node.hpp"
+#include "sensor_msgs/msg/imu.hpp"
 
 #include <chrono>
 #include <functional>
@@ -43,6 +44,8 @@
 #include <string>
 #include <thread>
 #include <utility>
+
+#include <tf2_eigen/tf2_eigen.hpp>
 
 
 namespace pointcloud_to_laserscan
@@ -65,6 +68,50 @@ GimbalNode::GimbalNode(const rclcpp::NodeOptions & options)
                 imu_topic, imu_qos, std::bind(&GimbalNode::imuCallback, this, std::placeholders::_1));  
 }
 
+sensor_msgs::msg::Imu::SharedPtr GimbalNode::transformImu(const sensor_msgs::msg::Imu::ConstSharedPtr& imu_raw, 
+                                                   const geometry_msgs::msg::TransformStamped& transform)
+{
+    sensor_msgs::msg::Imu::SharedPtr imu(new sensor_msgs::msg::Imu);
+    Eigen::Affine3d transform_eigen = tf2::transformToEigen(transform);
+
+    // Copy header
+    imu->header = imu_raw->header;
+
+    // Transform orientation
+    Eigen::Quaterniond orientation(imu_raw->orientation.w, imu_raw->orientation.x, 
+                                    imu_raw->orientation.y, imu_raw->orientation.z);
+    Eigen::Quaterniond rotation(transform_eigen.rotation());
+    Eigen::Quaterniond quat_transformed = orientation * rotation.inverse();
+
+    imu->orientation.w = quat_transformed.w();
+    imu->orientation.x = quat_transformed.x();
+    imu->orientation.y = quat_transformed.y();
+    imu->orientation.z = quat_transformed.z();
+
+    // Transform angular velocity
+    Eigen::Vector3d ang_vel(imu_raw->angular_velocity.x,
+                            imu_raw->angular_velocity.y,
+                            imu_raw->angular_velocity.z);
+    Eigen::Vector3d ang_vel_transformed = transform_eigen.rotation() * ang_vel;
+
+    imu->angular_velocity.x = ang_vel_transformed[0];
+    imu->angular_velocity.y = ang_vel_transformed[1];
+    imu->angular_velocity.z = ang_vel_transformed[2];
+
+    // Transform linear acceleration (accounting for centripetal acceleration)
+    Eigen::Vector3d lin_accel(imu_raw->linear_acceleration.x,
+                              imu_raw->linear_acceleration.y,
+                              imu_raw->linear_acceleration.z);
+    Eigen::Vector3d lin_accel_transformed = transform_eigen.rotation() * lin_accel
+                                            + ang_vel_transformed.cross(ang_vel_transformed.cross(-transform_eigen.translation()));
+
+    imu->linear_acceleration.x = lin_accel_transformed[0];
+    imu->linear_acceleration.y = lin_accel_transformed[1];
+    imu->linear_acceleration.z = lin_accel_transformed[2];
+
+    return imu;
+}
+
 void GimbalNode::imuCallback(const sensor_msgs::msg::Imu::ConstPtr& imu_msg)
 {
   RCLCPP_DEBUG_STREAM(get_logger(), "IMU Callback");
@@ -77,9 +124,7 @@ void GimbalNode::imuCallback(const sensor_msgs::msg::Imu::ConstPtr& imu_msg)
 
   // transform imu to parent frame
   geometry_msgs::msg::TransformStamped transform;
-  geometry_msgs::msg::Quaternion::ConstPtr imuConst;
-  geometry_msgs::msg::Quaternion::Ptr imu(new geometry_msgs::msg::Quaternion);
-
+  sensor_msgs::msg::Imu::SharedPtr transformed_msg;
   if (!(parent_frame_ == imu_msg->header.frame_id))
   {
     try
@@ -88,12 +133,11 @@ void GimbalNode::imuCallback(const sensor_msgs::msg::Imu::ConstPtr& imu_msg)
                                 rclcpp::Duration::from_seconds(transform_tolerance_)))
       {
         transform = tf2_->lookupTransform(parent_frame_, imu_msg->header.frame_id, imu_msg->header.stamp);
-        tf2::doTransform(imu_msg->orientation, *imu, transform);
-        imuConst = imu;
+        transformed_msg = transformImu(imu_msg, transform);
       }
       else
       {
-        RCLCPP_WARN_STREAM(get_logger(), "Imu_in is waiting to transform cloud from " << imu_msg->header.frame_id << " to "
+        RCLCPP_WARN_STREAM(get_logger(), "Imu_in is waiting to transform from " << imu_msg->header.frame_id << " to "
                                                                 << parent_frame_ << ".");
         return;
       }
@@ -106,15 +150,17 @@ void GimbalNode::imuCallback(const sensor_msgs::msg::Imu::ConstPtr& imu_msg)
   }
   else
   {
-    imuConst = std::make_shared<const geometry_msgs::msg::Quaternion>(imu_msg->orientation);
+     transformed_msg = std::make_shared<sensor_msgs::msg::Imu>(sensor_msgs::msg::Imu(*imu_msg));
   }
 
   // Extract roll, pitch, and yaw
   tf2::Quaternion quat;
-  tf2::convert(*imuConst, quat);
+  tf2::convert(transformed_msg->orientation, quat);
   double roll, pitch, yaw;
   tf2::Matrix3x3(quat).getRPY(roll, pitch, yaw);
   quat.setRPY(-roll,-pitch, 0.0);
+  // RCLCPP_INFO_STREAM(get_logger(), "roll: "  << roll);
+  // RCLCPP_INFO_STREAM(get_logger(), "pitch: " << pitch); 
   
   //Publish transform from parent to child frame id's
   geometry_msgs::msg::TransformStamped tf_msg;
